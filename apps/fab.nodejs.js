@@ -13,7 +13,7 @@ exports.app = function( app ) {
       status = 200,
       _encoding = "ascii",
       inbound = app.call( listener );
-    
+
     if ( inbound ) {
       inbound = inbound({
         method: request.method,
@@ -21,18 +21,18 @@ exports.app = function( app ) {
         url: url.parse( request.url )
       });
     }
-    
+
     if ( inbound ) {
       request
         .addListener( "end", inbound )
         .addListener( "data", function( body ) {
-          if ( inbound ) inbound = inbound({ body: body });
+          if ( inbound ) inbound = inbound({ body: body.toString ? body.toString() : body });
         })
     }
 
     function listener( obj ) {
       if ( obj ) {
-      
+
         if ( "status" in obj ) {
           status = obj.status;
         }
@@ -45,25 +45,25 @@ exports.app = function( app ) {
         if ( "_encoding" in obj ) {
           _encoding = obj._encoding;
         }
-  
+
         if ( "body" in obj ) {
           if ( headers !== false ) {
             response.writeHead( status, headers || {} );
             headers = false;
           }
-          
+
           response.write( obj.body, _encoding );
         }
 
         return listener;
       }
-      
+
       else {
         if ( headers !== false ) {
           response.writeHead( status, headers || {} );
           headers = false;
         }
-        
+
         response.end();
       }
     }
