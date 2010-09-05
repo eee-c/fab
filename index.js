@@ -1,18 +1,18 @@
 module.exports = fab = function() {
   var drain;
-  
+
   return function fab( write ) {
     return function read( obj ) {
       if ( drain ) return drain( obj );
-      
+
       if ( obj && obj.apply ) {
         var fn = obj;
         arguments[ 0 ] = write;
         return fab( fn.apply( undefined, arguments ) );
       }
-      
+
       write = write.apply( undefined, arguments );
-      return read;      
+      return read;
     }
   }( fab.stream( function( x ){ drain = x } ) )
     .apply( undefined, arguments );
@@ -20,17 +20,17 @@ module.exports = fab = function() {
 
 fab.stream = function stream( write, queue ) {
   queue = queue || [];
-  
+
   var length = queue.length;
-  
-  function drain( write, req ) {    
+
+  function drain( write, req ) {
     for ( var i = 0; i < length; ) {
       write = write.apply( undefined, queue[ i++ ] );
     }
 
     return write;
   };
-  
+
   return function read() {
     if ( !arguments.length ) return write ? write( drain ) : drain;
 
@@ -44,22 +44,25 @@ fab.import = function( write, obj ) {
   return write;
 }
 
-fab.listen = function( write, port ) {
+fab.listen = function( write, port, fn ) {
   var url = require( "url" );
 
   return fab.stream( function read( stream ) {
-    require( "http" )
-      .createServer( listener( stream ) )      
-      .listen( port );
-    
+    var server = require( "http" )
+      .createServer( listener( stream ) );
+
+    if (fn) fn(server);
+
+    server.listen( port );
+
     return stream( write );
   });
-  
+
   function listener( stream ) {
     return function( req, res ) {
       var status = 200
         , headers = {};
-        
+
       stream( fab.render(
         read,
 
@@ -73,32 +76,32 @@ fab.listen = function( write, port ) {
           req.on( "data", write ).on( "end", write );
         }
       ))();
-        
+
       function read( body, head ) {
-        
+
         if ( !arguments.length ) res.end();
-  
+
         else {
           if ( head ) {
             if ( "status" in head ) status = head.status;
-            
+
             if ( "headers" in head ) {
               for ( var name in head.headers ) {
                 headers[ name ] = head.headers[ name ]
               }
             }
           }
-  
+
           if ( body ) {
             if ( headers ) {
               res.writeHead( status, headers );
               headers = undefined;
             }
-            
+
             res.write( body );
           }
         }
-  
+
         return read;
       }
     }
@@ -116,7 +119,7 @@ fab.route = function() {
   }
 
   return route;
-  
+
   function route( write, pattern ) {
     return fab.stream( function( yes ) {
       return fab.stream( function( no ) {
@@ -127,19 +130,19 @@ fab.route = function() {
 
           if ( pattern.test( pathname ) ) {
             app = yes;
-            
+
 //             not sure why this doesn't work.
 //             head = Object.create( head );
 //             head.url = Object.create( head.url );
             head.url.pathname = pathname.replace( pattern, function() {
               url.capture = ( url.capture || [] )
                 .concat( slice.call( arguments, 1, -2 ) );
-                
+
               return "";
             });
-            
+
           }
-          
+
           return app( write, head );
         })();
       });
@@ -159,13 +162,13 @@ fab.method = function() {
       });
     });
   }
-  
+
   for ( var i = 5; i--; ) ( function( name ) {
     method[ name ] = function( write ) {
       return method( write, name );
     }
   })( names[ i ] );
-  
+
   return method;
 }();
 
@@ -178,7 +181,7 @@ fab.render = function( write ) {
       args[ 0 ] = read;
       return obj.apply( undefined, args );
     }
-    
+
     write = write.apply( undefined, arguments );
 
     return arguments.length ? read : write;
@@ -206,11 +209,11 @@ fab.concat = function( write ) {
 
     else {
       if ( buffer ) write = write( buffer );
-      
+
       buffer = "";
       write = write.apply( undefined, arguments );
     }
-    
+
     return arguments.length ? read : write;
   }
 }
@@ -233,57 +236,57 @@ fab.html = function() {
  SOURCE WBR".split( " " )
 
     ];
-  
+
   for ( var isVoid = 0, names; names = tags[ isVoid ]; isVoid++ ) {
     for ( var i = 0, name; name = names[ i++ ]; ) {
       elem[ name ] = elem( name.toLowerCase(), !!isVoid );
     }
   }
-  
+
   elem.DOCTYPE = function( write, dec ) {
     return fab.concat( write )( "<!DOCTYPE " )( dec )( ">" );
   }
 
   elem.COMMENT = function( write ) {
     write = fab.concat( write )( "<!-- " );
-    
+
     return function read( obj ) {
       if ( !arguments.length ) return write( " -->" );
       write = write( obj );
-      return read;    
+      return read;
     }
   }
-  
+
   return elem;
-  
+
   function elem( name, isVoid ) {
     return function( write, obj ) {
       write = fab.concat( write )
-      write = write( "<" + name ); 
+      write = write( "<" + name );
       write = attrs( write )( obj )( ">" );
-      
+
       if ( isVoid ) return write;
-    
+
       return function read( arg ) {
         if ( !arguments.length ) return write( "</" + name + ">" );
-        
+
         write = write.apply( undefined, arguments );
         return read;
       };
     }
   }
-  
+
   function attrs( write ) {
     return function read( obj ) {
       for ( var name in obj ) {
         write = write( " " )( name )( "=" );
         write = attr( write )( obj[ name ] );
       }
-    
+
       return write;
     }
   }
-  
+
   function attr( write ) {
     return function read( value ) {
       return write( "\"" )( value )( "\"" );
